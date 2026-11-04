@@ -147,4 +147,4 @@ logiai/
 └── COMPTE_RENDU.md
 ```
 
-Les fichiers générés (`data/*.csv`, `models/`) et le fichier `.env` ne doivent pas être publiés dans le dépôt Git.s
+Les fichiers générés (`data/*.csv`, `models/`) et le fichier `.env` ne doivent pas être publiés dans le dépôt Git.
