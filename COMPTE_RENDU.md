@@ -1,6 +1,6 @@
 # Compte rendu : TP API LogiAI
 
-**Noms :** Salma Ait Dada  
+**Noms :** MOUSSAID HAMZA  
 **Groupe :** G3
 
 ## 1. Environnement et premiers tests
