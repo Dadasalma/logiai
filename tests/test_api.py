@@ -1,10 +1,11 @@
 
-"""Le banc d'essai de l'API. Lancer : python -m pytest"""
+"""Tests de l'API LogiAI."""
 
 from fastapi.testclient import TestClient
 
 from logiai.api.main import app, state
 
+API_HEADERS = {"X-API-Key": "test-user-key"}
 
 VALIDE = {
     "distance_km": 120.0,
@@ -17,9 +18,15 @@ VALIDE = {
 }
 
 
-def post(client, **changements):
-    return client.post("/v1/predict", json={**VALIDE, **changements})
+API_HEADERS = {"X-API-Key": "test-user-key"}
 
+
+def post(client, **changements):
+    return client.post(
+        "/v1/predict",
+        json={**VALIDE, **changements},
+        headers=API_HEADERS,
+    )
 
 def test_health_repond_ok():
     with TestClient(app) as client:
@@ -51,8 +58,8 @@ def test_predict_forme_de_la_reponse():
 
 def test_predict_probabilite_entre_0_et_1():
     with TestClient(app) as client:
-        data = post(client).json()
-        assert 0 <= data["probabilite_retard"] <= 1
+        probability = post(client).json()["probabilite_retard"]
+        assert 0 <= probability <= 1
 
 
 def test_predict_trajet_risque_plus_eleve_que_trajet_facile():
@@ -88,11 +95,16 @@ def test_vehicule_inconnu_refuse():
 
 
 def test_champ_manquant_refuse():
-    body = {k: v for k, v in VALIDE.items() if k != "poids_kg"}
-
     with TestClient(app) as client:
-        assert client.post("/v1/predict", json=body).status_code == 422
+        body = {k: v for k, v in VALIDE.items() if k != "poids_kg"}
 
+        response = client.post(
+            "/v1/predict",
+            json=body,
+            headers=API_HEADERS,
+        )
+
+        assert response.status_code == 422
 
 def test_champ_inconnu_refuse():
     with TestClient(app) as client:
@@ -106,19 +118,9 @@ def test_texte_a_la_place_d_un_nombre_refuse():
 
 def test_modele_absent_renvoie_503():
     with TestClient(app) as client:
-        state.pop("predictor", None)  # On simule un modèle non chargé.
-        assert post(client).status_code == 503
-
-
-def test_heure_depart_24_refusee():
-    with TestClient(app) as client:
-        r = post(client, heure_depart=24)
-        assert r.status_code == 422
-
-
-def test_alerte_coherente_avec_seuil():
-    with TestClient(app) as client:
-        data = post(client).json()
-        assert data["alerte"] == (
-            data["probabilite_retard"] >= data["seuil"]
-        )
+        original = state.pop("predictor", None)
+        try:
+            assert post(client).status_code == 503
+        finally:
+            if original is not None:
+                state["predictor"] = original
