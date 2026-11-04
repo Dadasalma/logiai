@@ -1,0 +1,172 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LogiAI - Prédiction des retards</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 650px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f4f6f8;
+        }
+        h1 { color: #17365d; }
+        form {
+            background: white;
+            padding: 24px;
+            border-radius: 10px;
+        }
+        label {
+            display: block;
+            margin-top: 14px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            margin-top: 5px;
+        }
+        button {
+            margin-top: 22px;
+            padding: 12px;
+            width: 100%;
+            background: #17365d;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:disabled { opacity: 0.5; cursor: wait; }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>LogiAI</h1>
+    <p>Prédiction du risque de retard d'une livraison.</p>
+
+    <form id="prediction-form">
+        <label>Adresse de l'API</label>
+        <input id="api-url" type="url"
+               value="http://127.0.0.1:8000" required>
+
+        <label>Clé API</label>
+        <input id="api-key" type="password" required>
+
+        <label>Distance (km)</label>
+        <input name="distance_km" type="number"
+               min="1" max="1000" step="any" value="100" required>
+
+        <label>Poids (kg)</label>
+        <input name="poids_kg" type="number"
+               min="0.5" max="3000" step="any" value="500" required>
+
+        <label>Heure de départ</label>
+        <input name="heure_depart" type="number"
+               min="0" max="23" step="1" value="10" required>
+
+        <label>Pluie (mm)</label>
+        <input name="pluie_mm" type="number"
+               min="0" max="100" step="any" value="5" required>
+
+        <label>Indice de trafic</label>
+        <input name="trafic_index" type="number"
+               min="0" max="10" step="any" value="5" required>
+
+        <label>Nombre d'arrêts</label>
+        <input name="nb_arrets" type="number"
+               min="0" max="20" step="1" value="3" required>
+
+        <label>Type de véhicule</label>
+        <select name="type_vehicule" required>
+            <option value="moto">Moto</option>
+            <option value="fourgon" selected>Fourgon</option>
+            <option value="camion">Camion</option>
+        </select>
+
+        <button id="submit-button" type="submit">
+            Prédire le risque
+        </button>
+    </form>
+
+    <div id="result">Le résultat apparaîtra ici.</div>
+
+    <script>
+        const form = document.getElementById("prediction-form");
+        const button = document.getElementById("submit-button");
+        const result = document.getElementById("result");
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            button.disabled = true;
+            button.textContent = "Prédiction en cours...";
+            result.textContent = "Veuillez patienter...";
+
+            const formData = new FormData(form);
+
+            const livraison = {
+                distance_km: Number(formData.get("distance_km")),
+                poids_kg: Number(formData.get("poids_kg")),
+                heure_depart: Number(formData.get("heure_depart")),
+                pluie_mm: Number(formData.get("pluie_mm")),
+                trafic_index: Number(formData.get("trafic_index")),
+                nb_arrets: Number(formData.get("nb_arrets")),
+                type_vehicule: formData.get("type_vehicule")
+            };
+
+            try {
+                const response = await fetch(
+                    document.getElementById("api-url").value.replace(/\/$/, "")
+                    + "/v1/predict",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-API-Key": document.getElementById("api-key").value
+                        },
+                        body: JSON.stringify(livraison)
+                    }
+                );
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    const detail = typeof data.detail === "string"
+                        ? data.detail
+                        : JSON.stringify(data.detail);
+
+                    throw new Error(`Erreur ${response.status}: ${detail}`);
+                }
+
+                const probability =
+                    (data.probabilite_retard * 100).toFixed(2);
+
+                result.textContent =
+                    `Probabilité de retard : ${probability}%\n` +
+                    `Alerte : ${data.alerte ? "OUI" : "NON"}\n` +
+                    `Seuil : ${(data.seuil * 100).toFixed(2)}%\n` +
+                    `Version du modèle : ${data.model_version}`;
+
+            } catch (error) {
+                result.textContent = error.message.includes("Failed to fetch")
+                    ? "Erreur réseau ou CORS : impossible de contacter l'API."
+                    : error.message;
+            } finally {
+                button.disabled = false;
+                button.textContent = "Prédire le risque";
+            }
+        });
+    </script>
+
+</body>
+</html>
