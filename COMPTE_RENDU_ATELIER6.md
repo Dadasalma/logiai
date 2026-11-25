@@ -63,3 +63,14 @@ RÃ©sultat :
 ```
 
 L'avertissement est une dÃ©prÃ©ciation liÃ©e Ã  Starlette/httpx ; les tests sont passÃ©s.
+
+### Test complémentaire — Pluie de 500 mm
+
+- Entrée : pluie_mm = 500.0
+- Résultat CLI : Probabilité de retard : 100 % (ALERTE)
+- Observation : le modèle signale un risque élevé de retard pour cette livraison.
+### Test complÃ©mentaire â€” Pluie de 500 mm
+
+- EntrÃ©e : `pluie_mm = 500.0`
+- RÃ©sultat CLI : `ProbabilitÃ© de retard : 100 % (ALERTE)`
+- Observation : le modÃ¨le signale un risque Ã©levÃ© de retard pour cette livraison.
