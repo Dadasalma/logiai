@@ -74,3 +74,10 @@ L'avertissement est une dépréciation liée à Starlette/httpx ; les tests sont
 - Entrée : `pluie_mm = 500.0`
 - Résultat CLI : `Probabilité de retard : 100 % (ALERTE)`
 - Observation : le modèle signale un risque élevé de retard pour cette livraison.
+
+### Test sans LOGIAI_HOME
+
+- Commande : `logiai-predict livraison_test.json`, exécutée depuis `C:\dev`.
+- Résultat : échec avec `FileNotFoundError`.
+- Chemin recherché : `C:\dev\models\model.joblib`.
+- Conclusion : la variable `LOGIAI_HOME` doit être définie lorsque la commande est exécutée depuis un répertoire différent de la racine du projet.
