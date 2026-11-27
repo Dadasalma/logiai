@@ -1,8 +1,8 @@
-\# Atelier 5 : Conteneuriser et déployer LogiAI avec Docker
+# Atelier 5 : Conteneuriser et déployer LogiAI avec Docker
 
 
 
-\## 1. Premier constat : ça ne marche que chez moi
+## 1. Premier constat : ça ne marche que chez moi
 
 
 
@@ -20,13 +20,13 @@
 
 
 
-\*\*Si je donne mon dossier à un camarade, il doit\*\* installer la bonne version de Python,
+*\*Si je donne mon dossier à un camarade, il doit\*\* installer la bonne version de Python,
 
 créer son .venv, recréer son .env, entraîner le modèle et lancer deux terminaux.
 
 
 
-\## 2. Dockerfile de l'API
+## 2. Dockerfile de l'API
 
 
 
@@ -62,7 +62,7 @@ CMD \["uvicorn", "logiai.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 
 
-\## 3. Dockerfile de la page web
+## 3. Dockerfile de la page web
 
 
 
@@ -80,7 +80,7 @@ EXPOSE 80
 
 
 
-\## 4. docker-compose.yml
+## 4. docker-compose.yml
 
 
 
@@ -168,7 +168,7 @@ services:
 
 L'API utilise le fichier `.env` pour récupérer les clés, et les dossiers `models` et `data` sont montés en volumes. Le healthcheck vérifie que l'API répond sur le port 8000. Le service web attend que l'API soit healthy avant de démarrer.
 
-\## 5. Trois expériences (activité 1)
+## 5. Trois expériences (activité 1)
 
 
 
@@ -184,7 +184,7 @@ L'API utilise le fichier `.env` pour récupérer les clés, et les dossiers `mod
 
 
 
-\## 6. Codes de l'étape 5 (via Nginx, port 8080)
+## 6. Codes de l'étape 5 (via Nginx, port 8080)
 
 
 
@@ -202,7 +202,7 @@ L'API utilise le fichier `.env` pour récupérer les clés, et les dossiers `mod
 
 
 
-\## 7. Étape 6 : F12 / Network
+## 7. Étape 6 : F12 / Network
 
 
 
@@ -214,7 +214,7 @@ donc pas de CORS ni de requête préliminaire.
 
 
 
-\## 8. Étape 8 : API arrêtée
+## 8. Étape 8 : API arrêtée
 
 
 
@@ -228,7 +228,7 @@ redevient healthy et la page refonctionne.
 
 
 
-\## 9. docker stats
+## 9. docker stats
 
 
 
@@ -242,7 +242,7 @@ redevient healthy et la page refonctionne.
 
 
 
-\## 10. Cinq questions de compréhension
+## 10. Cinq questions de compréhension
 
 
 
@@ -260,11 +260,6 @@ redevient healthy et la page refonctionne.
 
 &#x20;
 
-\## 11. Lien de la pull 
+## 11. Lien de la pull request
 
-request
-
-
-
-\[À coller après la création de la PR]
-
+[Pull request #3](https://github.com/Dadasalma/logiai/pull/3)
