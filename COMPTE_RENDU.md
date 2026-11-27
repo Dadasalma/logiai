@@ -1,105 +1,265 @@
-﻿# Compte rendu : TP API LogiAI
+# Atelier 5 : Conteneuriser et déployer LogiAI avec Docker
 
-**Noms :** SALMA AIT DADA  
-**Groupe :** G3
 
-## 1. Environnement et premiers tests
 
-- **Sortie de `python -m pytest` au dÃ©part :** La sortie initiale n'a pas Ã©tÃ© conservÃ©e. AprÃ¨s finalisation du projet, l'exÃ©cution de `python -m pytest -q` donne :
+## 1. Premier constat : ça ne marche que chez moi
 
-```text
-42 passed, 1 warning
+
+
+| Ce que le projet suppose | Qui le garantit aujourd'hui |
+
+|---|---|
+
+| Python et bibliothèques compatibles avec model.joblib | moi, avec .venv et requirements.txt |
+
+| Le fichier .env avec les deux clés | moi |
+
+| Un modèle entraîné dans models/ | moi, avec python -m logiai.train |
+
+| Deux terminaux (uvicorn + http.server 5500) | moi |
+
+
+
+*\*Si je donne mon dossier à un camarade, il doit\*\* installer la bonne version de Python,
+
+créer son .venv, recréer son .env, entraîner le modèle et lancer deux terminaux.
+
+
+
+## 2. Dockerfile de l'API
+
+
+
+```dockerfile
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY pyproject.toml /tmp/build/
+
+COPY logiai/ /tmp/build/logiai/
+
+RUN pip install --no-cache-dir --no-deps /tmp/build \&\& rm -rf /tmp/build
+
+COPY data/ ./data/
+
+COPY models/ ./models/
+
+ENV LOGIAI\_HOME=/app
+
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8000
+
+CMD \["uvicorn", "logiai.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
 ```
 
-- **Pourquoi certains tests qui attendent un 422 passent-ils dÃ©jÃ , alors que rien n'est Ã©crit ?**
 
-FastAPI utilise automatiquement Pydantic pour valider les donnÃ©es reÃ§ues par l'API. Les champs obligatoires, les types et les contraintes dÃ©finies dans le schÃ©ma sont vÃ©rifiÃ©s automatiquement. Si les donnÃ©es ne respectent pas ces rÃ¨gles, FastAPI renvoie une erreur HTTP 422 sans qu'il soit nÃ©cessaire d'Ã©crire manuellement chaque contrÃ´le.
 
-## 2. Mon schÃ©ma
+## 3. Dockerfile de la page web
 
-Les bornes sont dÃ©finies selon les limites retenues pour notre scÃ©nario de livraison.
 
-| Variable | Min | Max | Pourquoi |
-|---|---:|---:|---|
-| distance_km | 1 | 1000 | Une livraison doit parcourir au moins 1 km et la distance maximale retenue est de 1000 km. |
-| poids_kg | 0.5 | 3000 | Le poids doit Ãªtre positif et respecter la capacitÃ© prÃ©vue pour les vÃ©hicules simulÃ©s. |
-| heure_depart | 0 | 23 | L'heure de dÃ©part doit Ãªtre comprise entre 0 h et 23 h. |
-| pluie_mm | 0 | 100 | Les prÃ©cipitations ne peuvent pas Ãªtre nÃ©gatives ; 100 mm reprÃ©sente une forte pluie dans notre scÃ©nario. |
-| trafic_index | 0 | 10 | L'indice de trafic utilise une Ã©chelle comprise entre 0 et 10. |
-| nb_arrets | 0 | 20 | Le nombre d'arrÃªts ne peut pas Ãªtre nÃ©gatif et la limite retenue est de 20. |
 
-Le type de vÃ©hicule est Ã©galement contrÃ´lÃ© : seules les valeurs `moto`, `fourgon` et `camion` sont autorisÃ©es.
+```dockerfile
 
-## 3. Ma fonction predict()
+FROM nginx:alpine
 
-```python
-def predict(self, features: dict) -> dict:
-    """features : un dictionnaire avec les 7 variables du contrat."""
-    df = pd.DataFrame([features], columns=FEATURES)
-    proba = float(self.model.predict_proba(df)[0, 1])
+COPY web/index.html /usr/share/nginx/html/index.html
 
-    return {
-        "probabilite_retard": round(proba, 4),
-        "alerte": proba >= self.threshold,
-        "seuil": self.threshold,
-        "model_version": self.version,
-    }
+COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
 ```
 
-Cette fonction transforme les caractÃ©ristiques de la livraison en DataFrame, utilise le modÃ¨le entraÃ®nÃ© pour calculer la probabilitÃ© de retard, puis retourne le rÃ©sultat et l'alerte selon le seuil configurÃ©.
 
-## 4. Quatre requÃªtes
 
-| RequÃªte | Code obtenu | Pourquoi |
-|---|---:|---|
-| Livraison normale | 200 | Les donnÃ©es sont valides et la prÃ©diction est effectuÃ©e. |
-| `distance_km = -5` | 422 | La distance est infÃ©rieure Ã  la borne minimale de 1 km. |
-| `type_vehicule = "avion"` | 422 | Le type de vÃ©hicule n'appartient pas aux valeurs autorisÃ©es. |
-| ModÃ¨le absent | 503 | Le service API fonctionne, mais le modÃ¨le nÃ©cessaire Ã  la prÃ©diction est indisponible. |
+## 4. docker-compose.yml
 
-Le comportement du modÃ¨le absent est Ã©galement vÃ©rifiÃ© par le test automatisÃ© `test_modele_absent_renvoie_503`.
 
-## 5. Questions de comprÃ©hension
 
-**1. Pourquoi charge-t-on le modÃ¨le au dÃ©marrage et pas Ã  chaque requÃªte ?**
+```yaml
 
-Pour Ã©viter de recharger le fichier du modÃ¨le Ã  chaque demande. Cela rÃ©duit le temps de traitement, Ã©conomise les ressources et amÃ©liore les performances de l'API.
+services:
 
-**2. Qui Ã©crit le contrÃ´le Â« pluie <= 100 Â», et oÃ¹ est-il Ã©crit ?**
+&#x20; api:
 
-Le dÃ©veloppeur dÃ©finit cette rÃ¨gle dans `logiai/api/schemas.py`, avec Pydantic :
+&#x20;   build:
 
-```python
-pluie_mm: float = Field(ge=0, le=100)
+&#x20;     context: .
+
+&#x20;     dockerfile: Dockerfile
+
+&#x20;   container\_name: logiai-api
+
+&#x20;   env\_file:
+
+&#x20;     - .env
+
+&#x20;   environment:
+
+&#x20;     LOGIAI\_HOME: /app
+
+&#x20;   ports:
+
+&#x20;     - "8001:8000"
+
+&#x20;   volumes:
+
+&#x20;     - ./models:/app/models
+
+&#x20;     - ./data:/app/data
+
+&#x20;   healthcheck:
+
+&#x20;     test:
+
+&#x20;       - CMD
+
+&#x20;       - python
+
+&#x20;       - -c
+
+&#x20;       - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+
+&#x20;     interval: 30s
+
+&#x20;     timeout: 5s
+
+&#x20;     retries: 3
+
+&#x20;     start\_period: 10s
+
+&#x20;   restart: unless-stopped
+
+
+
+&#x20; web:
+
+&#x20;   build:
+
+&#x20;     context: .
+
+&#x20;     dockerfile: web/Dockerfile
+
+&#x20;   container\_name: logiai-web
+
+&#x20;   depends\_on:
+
+&#x20;     api:
+
+&#x20;       condition: service\_healthy
+
+&#x20;   ports:
+
+&#x20;     - "8080:80"
+
+&#x20;   restart: unless-stopped
+
 ```
 
-FastAPI dÃ©clenche automatiquement la validation lorsqu'une requÃªte arrive.
 
-**3. DiffÃ©rence entre 422 et 503 ?**
 
-- HTTP 422 : les donnÃ©es envoyÃ©es par le client ne respectent pas les rÃ¨gles de validation.
-- HTTP 503 : le service ne peut temporairement pas effectuer la prÃ©diction, par exemple parce que le modÃ¨le est indisponible.
+L'API utilise le fichier `.env` pour récupérer les clés, et les dossiers `models` et `data` sont montés en volumes. Le healthcheck vérifie que l'API répond sur le port 8000. Le service web attend que l'API soit healthy avant de démarrer.
 
-**4. Pourquoi une route `/v1/predict` plutÃ´t que `/predict` ?**
+## 5. Trois expériences (activité 1)
 
-`v1` signifie version 1 de l'API. La version permet de faire Ã©voluer l'API ultÃ©rieurement sans casser les applications qui utilisent l'ancienne version.
 
-**5. Que se passerait-il si la distance Ã©tait dÃ©clarÃ©e `int` ?**
 
-La distance serait reprÃ©sentÃ©e comme un nombre entier au lieu d'un nombre dÃ©cimal. On perdrait donc la possibilitÃ© de reprÃ©senter prÃ©cisÃ©ment des distances comme 12,5 km. Selon le mode de validation, une valeur dÃ©cimale pourrait Ãªtre convertie ou rejetÃ©e.
+| # | Expérience | Prévu | Obtenu | Explication |
 
-## 6. DÃ©cision : modÃ¨le absent
+|---|---|---|---|---|
 
-J'ai choisi de retourner une erreur HTTP 503 lorsque le modÃ¨le est absent.
+| 1 | Sans `--env-file` | 401 même avec la bonne clé | 401 | Le conteneur n'a pas les clés : .env est exclu de l'image et Docker ne le lit pas tout seul. |
 
-Cette solution permet Ã  l'API de dÃ©marrer et de conserver l'accÃ¨s aux autres fonctionnalitÃ©s, comme `/health`. Seule la prÃ©diction devient indisponible.
+| 2 | Sans `-p 8001:8000` | Conteneur Up mais curl échoue | `Failed to connect to localhost:8001` (port 8000/tcp non publié) | EXPOSE documente seulement ; il faut publier avec -p hôte:conteneur. |
 
-L'autre possibilitÃ© serait de refuser le dÃ©marrage de l'API si le modÃ¨le est absent. Cela garantit qu'une API dÃ©marrÃ©e possÃ¨de toujours son modÃ¨le, mais empÃªche Ã©galement d'utiliser les autres endpoints.
+| 3 | uvicorn sur 127.0.0.1 | Échec malgré le port publié | `curl: (52) Empty reply from server` | uvicorn n'accepte que les connexions internes au conteneur ; il faut 0.0.0.0. |
 
-J'ai choisi le 503 car il permet de signaler prÃ©cisÃ©ment l'indisponibilitÃ© du modÃ¨le sans arrÃªter complÃ¨tement le service.
 
-## 7. Lien de la pull request
 
-https://github.com/Dadasalma/logiai/pull/1
+## 6. Codes de l'étape 5 (via Nginx, port 8080)
 
-**Tests finaux :** 42 tests rÃ©ussis, aucune erreur.
+
+
+| Requête | Code |
+
+|---|---|
+
+| /api/health | 200 |
+
+| /api/v1/predict sans clé | 401 |
+
+| /api/v1/predict fausse clé | 401 |
+
+| /api/v1/predict bonne clé | 200 (probabilité 0.3658, alerte false, seuil 0.4) |
+
+
+
+## 7. Étape 6 : F12 / Network
+
+
+
+La requête part vers `http://localhost:8080/api/v1/predict` (même origine que la page).
+
+Une seule ligne `predict` (200, fetch, 13 ms), \*\*pas de requête OPTIONS\*\* : même origine,
+
+donc pas de CORS ni de requête préliminaire.
+
+
+
+## 8. Étape 8 : API arrêtée
+
+
+
+`docker compose stop api` → `/api/health` renvoie \*\*502 Bad Gateway\*\* (HTML de Nginx).
+
+La page affiche : `Unexpected token '<', "<html>... is not valid JSON"`, car le JavaScript
+
+essaie de lire du HTML comme du JSON. Après `docker compose start api`, l'API
+
+redevient healthy et la page refonctionne.
+
+
+
+## 9. docker stats
+
+
+
+| Conteneur | CPU | Mémoire | Réseau (I/O) | PIDS |
+
+|---|---|---|---|---|
+
+| logiai-api | 0.16 % | 142 MiB | 12.5 kB / 7.17 kB | 21 |
+
+| logiai-web | 0.00 % | 9 MiB | 24.1 kB / 33.3 kB | 9 |
+
+
+
+## 10. Cinq questions de compréhension
+
+
+
+1\. \*\*Image vs conteneur ?\*\* Une image est un modèle figé en lecture seule ; un conteneur est une instance en exécution de cette image, avec une fine couche inscriptible éphémère.
+
+2\. \*\*Pourquoi /api/v1/predict et pas api:8000 dans la page ?\*\* Le nom `api` n'existe que dans le réseau Docker, pas sur Windows ; le chemin relatif part vers le même hôte et le même port que la page, et Nginx relaie.
+
+3\. \*\*Pourquoi depends\_on seul ne suffit pas ?\*\* Il garantit l'ordre de démarrage, pas que l'API soit prête. `condition: service\_healthy` attend que le healthcheck réussisse.
+
+4\. \*\*Pourquoi le healthcheck utilise 127.0.0.1:8000 ?\*\* Le healthcheck s'exécute à l'intérieur du conteneur API. `127.0.0.1` désigne donc ce conteneur lui-même. L'API écoute sur `0.0.0.0:8000`, ce qui inclut son interface locale, et `/health` est accessible sans clé API.
+
+
+
+5\. \*\*Pourquoi un nouveau model.joblib est vu sans rebuild ?\*\* Grâce au bind mount `./models:/app/models`, le conteneur utilise directement le dossier `models` de la machine hôte. Le nouveau modèle est donc visible sans reconstruire l'image. Cependant, l'API doit être redémarrée pour recharger le modèle. En revanche, le code du dossier `logiai/` est intégré dans l'image : ses modifications nécessitent un rebuild.
+
+&#x20;
+
+## 11. Lien de la pull request
+
+[Pull request #3](https://github.com/Dadasalma/logiai/pull/3)
